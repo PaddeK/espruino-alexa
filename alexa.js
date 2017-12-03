@@ -32,7 +32,6 @@ const
     EmptyFn = () => {},
     GUID_PREFIX = '904bfa',
     Dgram = require('dgram'),
-    Url = require('url'),
     Http = require('http'),
     Wifi = require('Wifi');
 
@@ -134,7 +133,7 @@ function handleOtherUrlPost(alexa, req, res)
 {
     debug([`Post OTHER URL ${req.url} received`, 'doPost STARTED'].join('\n'));
 
-    let urlParts = Url.parse(req.url, true),
+    let urlParts = url.parse(req.url, true),
         length = req.headers["Content-Length"];
 
     if (length < 1024) {
