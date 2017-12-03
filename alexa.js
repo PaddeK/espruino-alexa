@@ -1,43 +1,43 @@
 'use strict';
 
 const
-        DefaultOptions = {
-            debug: true,
-            wifi: {
-                ssid: null,
-                password: null
-            },
-            accessPoint: {
-                ssidPrefix: 'Vaxus-IOT',
-                authMode: 'open',
-                password: ''
-            },
-            alexa: {
-                port: 1900,
-                httpPort: 80
-            },
-            led: {
-                namePrefix: 'LIGHT',
-                pwm: false,
-                pin: 13,
-                onValue: 1,
-                offValue: 0,
-                brightness: 170
-            },
-            device: {
-                pin: 12,
-                onValue: 1
-            }
+    DefaultOptions = {
+        debug: true,
+        wifi: {
+            ssid: null,
+            password: null
         },
-        EmptyFn = () => {},
-        GUID_PREFIX = '904bfa',
-        Dgram = require('dgram'),
-        Url = require('url'),
-        Http = require('http'),
-        Wifi = require('Wifi');
+        accessPoint: {
+            ssidPrefix: 'Vaxus-IOT',
+            authMode: 'open',
+            password: ''
+        },
+        alexa: {
+            port: 1900,
+            httpPort: 80
+        },
+        led: {
+            namePrefix: 'LIGHT',
+            pwm: false,
+            pin: 13,
+            onValue: 1,
+            offValue: 0,
+            brightness: 170
+        },
+        device: {
+            pin: 12,
+            onValue: 1
+        }
+    },
+    EmptyFn = () => {},
+    GUID_PREFIX = '904bfa',
+    Dgram = require('dgram'),
+    Url = require('url'),
+    Http = require('http'),
+    Wifi = require('Wifi');
 
 let Alexa,
-        debug = (...args) => console.log.apply(null, args);
+    debug = (...args) => console.log.apply(null, args);
 
 function OnOff(alexa, isOn)
 {
@@ -70,11 +70,11 @@ function buildUDPSearchResponse(alexa, info)
     ].join('\r\n');
 
     debug([
-              `UDP message sent to address: ${info.address} port: ${info.port}`,
-              'UDP message:', msg,
-              'buildUDPSearchResponse END',
-              '---'
-          ].join('\n'));
+        `UDP message sent to address: ${info.address} port: ${info.port}`,
+        'UDP message:', msg,
+        'buildUDPSearchResponse END',
+        '---'
+    ].join('\n'));
 
     return msg;
 }
@@ -84,18 +84,18 @@ function buildSetupXmlResponse(alexa)
     debug(['******************************************************', 'doSetupAnswerXML'].join('\n'));
 
     let res = [
-        '<?xml version="1.0"?>',
-        '<root>',
-        '<device>',
-        '<deviceType>urn:OriginallyUS:device:controllee:1</deviceType>',
-        `<friendlyName>${alexa.friendlyName}</friendlyName>`,
-        '<manufacturer>Belkin International Inc.</manufacturer>',
-        '<modelName>Emulated Socket</modelName>',
-        '<modelNumber>1.0001</modelNumber>',
-        `<UDN>uuid:Socket-1_0-${alexa.serialNumber}</UDN>`,
-        '</device>',
-        '</root>'
-    ].join('\r\n');
+            '<?xml version="1.0"?>',
+            '<root>',
+            '<device>',
+            '<deviceType>urn:OriginallyUS:device:controllee:1</deviceType>',
+            `<friendlyName>${alexa.friendlyName}</friendlyName>`,
+            '<manufacturer>Belkin International Inc.</manufacturer>',
+            '<modelName>Emulated Socket</modelName>',
+            '<modelNumber>1.0001</modelNumber>',
+            `<UDN>uuid:Socket-1_0-${alexa.serialNumber}</UDN>`,
+            '</device>',
+            '</root>'
+        ].join('\r\n');
 
     debug('******************************************************');
 
@@ -135,7 +135,7 @@ function handleOtherUrlPost(alexa, req, res)
     debug([`Post OTHER URL ${req.url} received`, 'doPost STARTED'].join('\n'));
 
     let urlParts = Url.parse(req.url, true),
-            length = req.headers["Content-Length"];
+        length = req.headers["Content-Length"];
 
     if (length < 1024) {
         req.on('data', d => {
@@ -143,9 +143,9 @@ function handleOtherUrlPost(alexa, req, res)
 
             if (alexa.cache.content.length === length) {
                 debug([
-                          `URL ${urlParts}`,`XXX ${urlParts.pathname}`, `Length ${length}`, `data= ${alexa.cache.content}`,
-                          `data length= ${alexa.cache.content.length}`
-                      ].join('\n'));
+                    `URL ${urlParts}`,`XXX ${urlParts.pathname}`, `Length ${length}`, `data= ${alexa.cache.content}`,
+                    `data length= ${alexa.cache.content.length}`
+                ].join('\n'));
 
                 res.writeHead(200);
                 res.end(alexa.cache.content);
@@ -166,13 +166,13 @@ function handleControlPost(alexa, req, res)
         alexa.cache.content += d;
 
         let databack, elapsed, currentTime,
-                length = req.headers['Content-Length'];
+            length = req.headers['Content-Length'];
 
         if (alexa.cache.content.length === length) {
             let isSet = alexa.cache.content.indexOf('<u:SetBinaryState xmlns:u') !== -1,
-                    isGet = alexa.cache.content.indexOf('<u:GetBinaryState xmlns:u') !== -1,
-                    isOn = alexa.cache.content.indexOf('<BinaryState>1</BinaryState>') !== -1,
-                    isOff = alexa.cache.content.indexOf('<BinaryState>0</BinaryState>') !== -1;
+                isGet = alexa.cache.content.indexOf('<u:GetBinaryState xmlns:u') !== -1,
+                isOn = alexa.cache.content.indexOf('<BinaryState>1</BinaryState>') !== -1,
+                isOff = alexa.cache.content.indexOf('<BinaryState>0</BinaryState>') !== -1;
 
             debug(`*** STATUS RECEIVED: isSetStatus ${isSet}, isGetStatus ${isGet}, isOn ${isOn}, isOff ${isOff}`);
 
@@ -232,14 +232,14 @@ function handlePost(alexa, req, res)
 function onHttpRequest(req, res)
 {
     debug([
-              'onHttpRequest',
-              '******************************************************',
-              `Req header= ${req.headers}`,
-              `Req method= ${req.method}`,
-              `Req length= ${req.headers['Content-Length']}`,
-              `Req url= ${req.url}`,
-              '******************************************************'
-          ].join('\n'));
+        'onHttpRequest',
+        '******************************************************',
+        `Req header= ${req.headers}`,
+        `Req method= ${req.method}`,
+        `Req length= ${req.headers['Content-Length']}`,
+        `Req url= ${req.url}`,
+        '******************************************************'
+    ].join('\n'));
 
     [handleGet, handlePost][req.method === 'POST'](this, req, res);
 }
@@ -247,7 +247,7 @@ function onHttpRequest(req, res)
 Alexa = function (options)
 {
     let apOpts,
-            mac = Wifi.getIP().mac.split(':');
+        mac = Wifi.getIP().mac.split(':');
 
     options = Object.assign(DefaultOptions, options);
     debug = options.debug === true ? debug : EmptyFn;
