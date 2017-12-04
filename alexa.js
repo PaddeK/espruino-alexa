@@ -32,11 +32,12 @@ const
     EmptyFn = () => {},
     GUID_PREFIX = '904bfa',
     Dgram = require('dgram'),
-    Http = require('http'),
-    Wifi = require('Wifi');
+    Http = require('http');
 
 let Alexa,
-    debug = (...args) => console.log.apply(null, args);
+    debug = function() {
+        console.log.apply(null, arguments);
+    };
 
 function OnOff(alexa, isOn)
 {
@@ -58,7 +59,7 @@ function buildUDPSearchResponse(alexa, info)
         'CACHE-CONTROL: max-age=86400',
         `DATE: ${(new Date()).toGMTString()}`,
         'EXT:',
-        `LOCATION: http://${Wifi.getIP().ip}:${alexa.options.alexa.httpPort}/setup.xml`,
+        `LOCATION: http://${alexa.ip}:${alexa.options.alexa.httpPort}/setup.xml`,
         'OPT: "http://schemas.upnp.org/upnp/1/0/"); ns=01',
         `01-NLS: ${alexa.uuid}`,
         'SERVER: Unspecified, UPnP/1.0, Unspecified',
@@ -243,53 +244,71 @@ function onHttpRequest(req, res)
     [handleGet, handlePost][req.method === 'POST'](this, req, res);
 }
 
-Alexa = function (options)
+Alexa = function (wifi, options)
 {
-    let apOpts,
-        mac = Wifi.getIP().mac.split(':');
+    let apOpts, mac;
 
-    options = Object.assign(DefaultOptions, options);
-    debug = options.debug === true ? debug : EmptyFn;
+    wifi.getIP((err, ip) => {
+        if (err) {
+            throw new Error('Cant determine mac address');
+        }
 
-    this.onState = 0;
-    this.options = options;
-    this.cache = {data: '', lastTime: 0};
-    this.uuid = [GUID_PREFIX].concat(mac).join('-');
-    this.serialNumber = parseInt(mac.join('').slice(-5), 16);
-    this.friendlyName = this.options.namePrefix + '-' + this.serialNumber;
-    this.udpServer = Dgram.createSocket({type: 'udp4', multicastGroup: '239.255.255.250'});
-    this.httpServer = Http.createServer(onHttpRequest.bind(this)).listen(this.options.alexa.httpPort);
+        mac = ip.mac.split(':');
+        options = Object.assign(DefaultOptions, options);
+        debug = options.debug === true ? debug : EmptyFn;
 
-    debug(`NAME: ${this.friendlyName}`, `SERIAL: ${this.serialNumber}`, `UUID: ${this.uuid}`);
-    debug('startVAXIOT started');
-    debug(`Connect to WIFI (${this.options.ssid})`);
+        this.onState = 0;
+        this.options = options;
+        this.cache = {data: '', lastTime: 0};
+        this.uuid = [GUID_PREFIX].concat(mac).join('-');
+        this.serialNumber = parseInt(mac.join('').slice(-5), 16);
+        this.friendlyName = this.options.led.namePrefix + '-' + this.serialNumber;
+        this.udpServer = Dgram.createSocket({type: 'udp4', multicastGroup: '239.255.255.250'});
+        this.httpServer = Http.createServer(onHttpRequest.bind(this)).listen(this.options.alexa.httpPort);
 
-    Wifi.stopAP(() => {
-        Wifi.connect(this.options.ssid, {password: this.options.wifi.password}, err => {
-            debug(`connected? err=${err} info=${Wifi.getIP()}`);
+        debug(`NAME: ${this.friendlyName}`, `SERIAL: ${this.serialNumber}`, `UUID: ${this.uuid}`);
+        debug('startVAXIOT started');
+        debug(`Connect to WIFI (${this.options.wifi.ssid})`);
 
-            debug(`Start WIFI AP with name (${this.options.accessPoint.ssidPrefix} ${this.serialNumber})`);
+        wifi.stopAP(() => {
+            wifi.connect(this.options.wifi.ssid, {password: this.options.wifi.password}, conErr => {
+                wifi.getIP((ipErr, ip) => {
+                    if (ipErr) {
+                        throw new Error('Cant determine ip address');
+                    }
 
-            apOpts = {authMode: this.options.accessPoint.authMode, password: this.options.accessPoint.password};
+                    this.ip = ip.ip;
 
-            Wifi.startAP(`${this.options.accessPoint.ssidPrefix} ${this.serialNumber}`, apOpts, apErr => {
-                this.udpServer.on('error', err => {
-                    debug('server.on error', err);
-                    this.udpServer.close();
+                    debug(`connected? err=${conErr} info=${ip}`);
+
+                    debug(`Start WIFI AP with name (${this.options.accessPoint.ssidPrefix} ${this.serialNumber})`);
+
+                    apOpts = {authMode: this.options.accessPoint.authMode, password: this.options.accessPoint.password};
+
+                    wifi.startAP(`${this.options.accessPoint.ssidPrefix} ${this.serialNumber}`, apOpts, apErr => {
+                        if (apErr) {
+                            throw new Error('Starting Access Point failed');
+                        }
+
+                        this.udpServer.on('error', err => {
+                            debug('server.on error', err);
+                            this.udpServer.close();
+                        });
+
+                        this.udpServer.on('message', (msg, info) => {
+                            debug('server.on UDP message received');
+                            debug(['---', `<${JSON.stringify(msg)}`, `<${JSON.stringify(info)}`, '---'].join('\n'));
+
+                            let response = buildUDPSearchResponse(this, info);
+
+                            this.udpServer.send(response, info.port, info.address);
+
+                            debug('server.on UDP response sent');
+                        });
+
+                        this.udpServer.bind(this.options.alexa.port);
+                    });
                 });
-
-                this.udpServer.on('message', (msg, info) => {
-                    debug('server.on UDP message received');
-                    debug(['---', `<${JSON.stringify(msg)}`, `<${JSON.stringify(info)}`, '---'].join('\n'));
-
-                    let response = buildUDPSearchResponse(this, info);
-
-                    this.udpServer.send(response, info.port, info.address);
-
-                    debug('server.on UDP response sent');
-                });
-
-                this.udpServer.bind(this.options.alexa.port);
             });
         });
     });
