@@ -9,8 +9,8 @@ const
         },
         accessPoint: {
             ssidPrefix: 'Vaxus-IOT',
-            authMode: 'open',
-            password: ''
+            authMode: 'wpa2',
+            password: 'Test1ng123'
         },
         alexa: {
             port: 1900,
@@ -57,7 +57,7 @@ function buildUDPSearchResponse(alexa, info)
     let msg = [
         'HTTP/1.1 200 OK',
         'CACHE-CONTROL: max-age=86400',
-        `DATE: ${(new Date()).toGMTString()}`,
+        `DATE: ${(new Date()).toUTCString()}`,
         'EXT:',
         `LOCATION: http://${alexa.ip}:${alexa.options.alexa.httpPort}/setup.xml`,
         'OPT: "http://schemas.upnp.org/upnp/1/0/"); ns=01',
@@ -102,14 +102,14 @@ function buildSetupXmlResponse(alexa)
     return res;
 }
 
-function handleSetupGet(res)
+function handleSetupGet(alexa, res)
 {
-    let response = buildSetupXmlResponse(this);
+    let response = buildSetupXmlResponse(alexa);
 
     res.writeHead(200, {
         'Content-Type': 'text/xml',
         'Content-Length': response.length,
-        'Date': (new Date()).toGMTString(),
+        'Date': (new Date()).toUTCString(),
         'X-User-Agent': 'redsonic',
         'SERVER': 'Unspecified, UPnP/1.0, Unspecified',
         'Connection': 'close',
@@ -118,7 +118,7 @@ function handleSetupGet(res)
     res.end(response);
 }
 
-function handleUnknownGet(res)
+function handleUnknownGet(alexa, res)
 {
     res.writeHead(200, {'Content-Type': 'text/html'});
     res.end('Unknown GET command received');
@@ -127,7 +127,7 @@ function handleUnknownGet(res)
 function handleGet(alexa, req, res)
 {
     debug('Get received');
-    [handleUnknownGet, handleSetupGet][req.url === '/setup.xml'](res);
+    [handleUnknownGet, handleSetupGet][~~(req.url === '/setup.xml')](alexa, res);
 }
 
 function handleOtherUrlPost(alexa, req, res)
@@ -226,7 +226,7 @@ function handleControlPost(alexa, req, res)
 
 function handlePost(alexa, req, res)
 {
-    [handleOtherUrlPost, handleControlPost][req.url === '/upnp/control/basicevent1'](alexa, req, res);
+    [handleOtherUrlPost, handleControlPost][~~(req.url === '/upnp/control/basicevent1')](alexa, req, res);
 }
 
 function onHttpRequest(req, res)
@@ -234,14 +234,14 @@ function onHttpRequest(req, res)
     debug([
         'onHttpRequest',
         '******************************************************',
-        `Req header= ${req.headers}`,
+        `Req header= ${JSON.stringify(req.headers, null, 4)}`,
         `Req method= ${req.method}`,
         `Req length= ${req.headers['Content-Length']}`,
         `Req url= ${req.url}`,
         '******************************************************'
     ].join('\n'));
 
-    [handleGet, handlePost][req.method === 'POST'](this, req, res);
+    [handleGet, handlePost][~~(req.method === 'POST')](this, req, res);
 }
 
 Alexa = function (wifi, options)
@@ -263,14 +263,13 @@ Alexa = function (wifi, options)
         this.uuid = [GUID_PREFIX].concat(mac).join('-');
         this.serialNumber = parseInt(mac.join('').slice(-5), 16);
         this.friendlyName = this.options.led.namePrefix + '-' + this.serialNumber;
-        this.udpServer = Dgram.createSocket({type: 'udp4', multicastGroup: '239.255.255.250'});
         this.httpServer = Http.createServer(onHttpRequest.bind(this)).listen(this.options.alexa.httpPort);
 
         debug(`NAME: ${this.friendlyName}`, `SERIAL: ${this.serialNumber}`, `UUID: ${this.uuid}`);
         debug('startVAXIOT started');
         debug(`Connect to WIFI (${this.options.wifi.ssid})`);
 
-        wifi.stopAP(() => {
+//        wifi.stopAP(() => {
             wifi.connect(this.options.wifi.ssid, {password: this.options.wifi.password}, conErr => {
                 wifi.getIP((ipErr, ip) => {
                     if (ipErr) {
@@ -279,37 +278,41 @@ Alexa = function (wifi, options)
 
                     this.ip = ip.ip;
 
-                    debug(`connected? err=${conErr} info=${ip}`);
+                    debug(`connected? err=${conErr} info=${JSON.stringify(ip, null, 4)}`);
 
-                    debug(`Start WIFI AP with name (${this.options.accessPoint.ssidPrefix} ${this.serialNumber})`);
+                    // debug(`Start WIFI AP with name (${this.options.accessPoint.ssidPrefix} ${this.serialNumber})`);
 
                     apOpts = {authMode: this.options.accessPoint.authMode, password: this.options.accessPoint.password};
 
-                    wifi.startAP(`${this.options.accessPoint.ssidPrefix} ${this.serialNumber}`, apOpts, apErr => {
-                        if (apErr) {
-                            throw new Error('Starting Access Point failed');
-                        }
+                    apOpts = {};
 
-                        this.udpServer.on('error', err => {
+                    // wifi.startAP(`${this.options.accessPoint.ssidPrefix} ${this.serialNumber}`, apOpts, apErr => {
+                    //     if (apErr) {
+                    //         throw new Error('Starting Access Point failed');
+                    //     }
+
+                        let sckt = Dgram.createSocket({type: 'udp4', multicastGroup: '239.255.255.250'});
+
+                        sckt.on('error', err => {
                             debug('server.on error', err);
-                            this.udpServer.close();
+                            sckt.close();
                         });
 
-                        this.udpServer.on('message', (msg, info) => {
+                        sckt.on('message', (msg, info) => {
                             debug('server.on UDP message received');
                             debug(['---', `<${JSON.stringify(msg)}`, `<${JSON.stringify(info)}`, '---'].join('\n'));
 
                             let response = buildUDPSearchResponse(this, info);
 
-                            this.udpServer.send(response, info.port, info.address);
+                            sckt.send(response, info.port, info.address);
 
                             debug('server.on UDP response sent');
                         });
 
-                        this.udpServer.bind(this.options.alexa.port);
-                    });
+                        sckt.bind(this.options.alexa.port);
+                    // });
                 });
-            });
+ //           });
         });
     });
 };

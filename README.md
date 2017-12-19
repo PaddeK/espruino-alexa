@@ -1,4 +1,4 @@
-# espruino-alexa
+# espruino-alexa (WIP)
 
 let Wifi = require('Wifi'),
     Alexa = require('alexa');
