@@ -7,11 +7,6 @@ const
             ssid: null,
             password: null
         },
-        accessPoint: {
-            ssidPrefix: 'Vaxus-IOT',
-            authMode: 'wpa2',
-            password: 'Test1ng123'
-        },
         alexa: {
             port: 1900,
             httpPort: 80
@@ -246,7 +241,7 @@ function onHttpRequest(req, res)
 
 Alexa = function (wifi, options)
 {
-    let apOpts, mac;
+    let apOpts, mac, socket, me = this;
 
     wifi.getIP((err, ip) => {
         if (err) {
@@ -257,62 +252,46 @@ Alexa = function (wifi, options)
         options = Object.assign(DefaultOptions, options);
         debug = options.debug === true ? debug : EmptyFn;
 
-        this.onState = 0;
-        this.options = options;
-        this.cache = {data: '', lastTime: 0};
-        this.uuid = [GUID_PREFIX].concat(mac).join('-');
-        this.serialNumber = parseInt(mac.join('').slice(-5), 16);
-        this.friendlyName = this.options.led.namePrefix + '-' + this.serialNumber;
-        this.httpServer = Http.createServer(onHttpRequest.bind(this)).listen(this.options.alexa.httpPort);
+        me.onState = 0;
+        me.options = options;
+        me.cache = {data: '', lastTime: 0};
+        me.uuid = [GUID_PREFIX].concat(mac).join('-');
+        me.serialNumber = parseInt(mac.join('').slice(-5), 16);
+        me.friendlyName = me.options.led.namePrefix + '-' + me.serialNumber;
+        me.httpServer = Http.createServer(onHttpRequest.bind(me)).listen(me.options.alexa.httpPort);
 
-        debug(`NAME: ${this.friendlyName}`, `SERIAL: ${this.serialNumber}`, `UUID: ${this.uuid}`);
+        debug(`NAME: ${me.friendlyName}`, `SERIAL: ${me.serialNumber}`, `UUID: ${me.uuid}`);
         debug('startVAXIOT started');
-        debug(`Connect to WIFI (${this.options.wifi.ssid})`);
+        debug(`Connect to WIFI (${me.options.wifi.ssid})`);
 
-//        wifi.stopAP(() => {
-            wifi.connect(this.options.wifi.ssid, {password: this.options.wifi.password}, conErr => {
-                wifi.getIP((ipErr, ip) => {
-                    if (ipErr) {
-                        throw new Error('Cant determine ip address');
-                    }
+        wifi.connect(me.options.wifi.ssid, {password: me.options.wifi.password}, conErr => {
+            wifi.getIP((ipErr, ip) => {
+                if (ipErr) {
+                    throw new Error('Cant determine ip address');
+                }
 
-                    this.ip = ip.ip;
+                me.ip = ip.ip;
 
-                    debug(`connected? err=${conErr} info=${JSON.stringify(ip, null, 4)}`);
+                debug(`connected? err=${conErr} info=${JSON.stringify(ip, null, 4)}`);
 
-                    // debug(`Start WIFI AP with name (${this.options.accessPoint.ssidPrefix} ${this.serialNumber})`);
+                socket = Dgram.createSocket({type: 'udp4', multicastGroup: '239.255.255.250'});
 
-                    apOpts = {authMode: this.options.accessPoint.authMode, password: this.options.accessPoint.password};
-
-                    apOpts = {};
-
-                    // wifi.startAP(`${this.options.accessPoint.ssidPrefix} ${this.serialNumber}`, apOpts, apErr => {
-                    //     if (apErr) {
-                    //         throw new Error('Starting Access Point failed');
-                    //     }
-
-                        let sckt = Dgram.createSocket({type: 'udp4', multicastGroup: '239.255.255.250'});
-
-                        sckt.on('error', err => {
-                            debug('server.on error', err);
-                            sckt.close();
-                        });
-
-                        sckt.on('message', (msg, info) => {
-                            debug('server.on UDP message received');
-                            debug(['---', `<${JSON.stringify(msg)}`, `<${JSON.stringify(info)}`, '---'].join('\n'));
-
-                            let response = buildUDPSearchResponse(this, info);
-
-                            sckt.send(response, info.port, info.address);
-
-                            debug('server.on UDP response sent');
-                        });
-
-                        sckt.bind(this.options.alexa.port);
-                    // });
+                socket.on('error', err => {
+                    debug('server.on error', err);
+                    socket.close();
                 });
- //           });
+
+                socket.on('message', (msg, info) => {
+                    debug('server.on UDP message received');
+                    debug(['---', `<${JSON.stringify(msg)}`, `<${JSON.stringify(info)}`, '---'].join('\n'));
+
+                    socket.send(buildUDPSearchResponse(me, info), info.port, info.address);
+
+                    debug('server.on UDP response sent');
+                });
+
+                socket.bind(me.options.alexa.port);
+            });
         });
     });
 };
